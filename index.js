@@ -1,27 +1,104 @@
 import express from "express";
+import session from "express-session";
+import cookieParser from "cookie-parser";
 
 const host = "0.0.0.0";
 const porta = 3000;
-
 
 var listaEquipes = []; 
 var contadorEquipe = 1;
 var contadorJogador = 1;
 
-
-var usuarioLogado = false;
-var usuarioNome = "";
-
-
 const server = express();
+
+
+server.use(session({
+    secret: "Minh4Ch4v3S3cr3t4",
+    resave: true, 
+    saveUninitialized: true, 
+    cookie: {
+        maxAge: 1000 * 60 * 30 
+    }
+}));
 
 
 server.use(express.urlencoded({ extended: true }));
 
 
-server.get("/", (req, res) => {
-  res.send(`
-    <DOCTYPE html>
+server.use(cookieParser());
+
+server.get("/login", (req, res) => {
+    res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <title>Login</title>
+      </head>
+      <body>
+        <div class="container mt-5">
+          <h2>Login - Campeonato LoL</h2>
+          <form method="POST" action="/login">
+            <div class="mb-3">
+              <label for="usuario" class="form-label">Usuário</label>
+              <input type="text" class="form-control" id="usuario" name="usuario" required>
+            </div>
+            <div class="mb-3">
+              <label for="senha" class="form-label">Senha</label>
+              <input type="password" class="form-control" id="senha" name="senha" required>
+            </div>
+            <button class="btn btn-primary" type="submit">Entrar</button>
+          </form>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+      </body>
+    </html>
+  `);
+});
+
+
+server.post("/login", (req, res) => {
+    const usuario = req.body.usuario;
+    const senha = req.body.senha;
+
+    if (usuario === "admin" && senha === "admin") {
+
+        req.session.dadosLogin = {
+            nome: "Administrador",
+            logado: true
+        };
+        res.redirect("/");
+    } else {
+        res.send(`
+        <!DOCTYPE html>
+        <html><head><meta charset="UTF-8"><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"><title>Erro Login</title></head>
+        <body class="p-4">
+            <div class="container">
+            <h3 class="text-danger">Usuário ou senha inválidos</h3>
+            <a class="btn btn-primary" href="/login">Tentar novamente</a>
+            </div>
+        </body></html>
+        `);
+    }
+});
+
+
+server.get("/logout", (req, res) => {
+    req.session.destroy();
+    res.redirect("/login");
+});
+
+
+
+server.get("/", verificarUsuarioLogado, (req, res) => {
+
+    let ultimoAcesso = req.cookies.ultimoAcesso;
+    const data = new Date();
+    res.cookie("ultimoAcesso", data.toLocaleString());
+
+    res.send(`
+    <!DOCTYPE html>
     <html>
       <head>
         <meta charset="UTF-8">
@@ -43,8 +120,9 @@ server.get("/", (req, res) => {
                 </li>
                 <li class="nav-item"><a class="nav-link" href="/listarEquipes">Listar Equipes</a></li>
               </ul>
-              <div>
-                ${usuarioLogado ? ` <a class="btn btn-sm btn-outline-danger" href="/logout">Logout</a>` : `<a class="btn btn-sm btn-outline-primary" href="/login">Login</a>`}
+              <div class="d-flex align-items-center">
+                 <span class="navbar-text me-3">Olá, ${req.session.dadosLogin.nome}</span>
+                 <a class="btn btn-sm btn-outline-danger" href="/logout">Sair</a>
               </div>
             </div>
           </div>
@@ -52,6 +130,11 @@ server.get("/", (req, res) => {
 
         <div class="container mt-4">
           <h1 class="text-center">Bem-vindo ao sistema do Campeonato Amador de LoL</h1>
+          
+          <div class="alert alert-info text-center">
+             Último acesso: ${ultimoAcesso || "Primeiro acesso"}
+          </div>
+
           <p class="text-center">Cadastre equipes e jogadores (formação: Top, Jungle, Mid, Atirador, Suporte).</p>
           <div class="text-center">
             <a class="btn btn-primary m-1" href="/cadastrarEquipe">Cadastrar Equipe</a>
@@ -66,89 +149,9 @@ server.get("/", (req, res) => {
 });
 
 
-server.get("/login", (req, res) => {
-  res.send(`
-    <DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8">
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
-        <title>Login</title>
-      </head>
-      <body>
-        <div class="container mt-5">
-          <h2>Login</h2>
-          <form method="POST" action="/login">
-            <div class="mb-3">
-              <label for="usuario" class="form-label">Usuário</label>
-              <input type="text" class="form-control" id="usuario" name="usuario" required>
-            </div>
-            <div class="mb-3">
-              <label for="senha" class="form-label">Senha</label>
-              <input type="password" class="form-control" id="senha" name="senha" required>
-            </div>
-            <button class="btn btn-primary" type="submit">Entrar</button>
-            <a class="btn btn-secondary" href="/">Voltar</a>
-          </form>
-        </div>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
-      </body>
-    </html>
-  `);
-});
-
-
-server.post("/login", (req, res) => {
-  const usuario = req.body.usuario;
-  const senha = req.body.senha;
-
-  
-  if (usuario === "admin" && senha === "admin") {
-    usuarioLogado = true;
-    usuarioNome = usuario;
-    res.redirect("/");
-  } else {
+server.get("/cadastrarEquipe", verificarUsuarioLogado, (req, res) => {
     res.send(`
-      <DOCTYPE html>
-      <html><head><meta charset="UTF-8"><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"><title>Login</title></head>
-      <body class="p-4">
-        <div class="container">
-          <h3 class="text-danger">Usuário ou senha inválidos</h3>
-          <a class="btn btn-primary" href="/login">Tentar novamente</a>
-          <a class="btn btn-secondary" href="/">Voltar</a>
-        </div>
-      </body></html>
-    `);
-  }
-});
-
-
-server.get("/logout", (req, res) => {
-  usuarioLogado = false;
-  usuarioNome = "";
-  res.redirect("/");
-});
-
-
-
-
-server.get("/cadastrarEquipe", (req, res) => {
-  if (!usuarioLogado) {
-    return res.send(`
-      <DOCTYPE html>
-      <html><head><meta charset="UTF-8"><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"><title>Precisa Logar</title></head>
-      <body class="p-4">
-        <div class="container">
-          <h3 class="text-danger">Você precisa estar logado para cadastrar equipes.</h3>
-          <a class="btn btn-primary" href="/login">Login</a>
-          <a class="btn btn-secondary" href="/">Voltar</a>
-        </div>
-      </body></html>
-    `);
-  }
-
-  res.send(`
-    <DOCTYPE html>
+    <!DOCTYPE html>
     <html>
       <head>
         <meta charset="UTF-8">
@@ -184,34 +187,31 @@ server.get("/cadastrarEquipe", (req, res) => {
 });
 
 
-server.post("/adicionarEquipe", (req, res) => {
-  if (!usuarioLogado) return res.redirect("/login");
+server.post("/adicionarEquipe", verificarUsuarioLogado, (req, res) => {
+    const nomeEquipe = req.body.nomeEquipe;
+    const capitao = req.body.capitao;
+    const contato = req.body.contato;
 
-  const nomeEquipe = req.body.nomeEquipe;
-  const capitao = req.body.capitao;
-  const contato = req.body.contato;
+    if (!nomeEquipe || !capitao || !contato) {
+        return res.send(`<p>Todos os campos são obrigatórios. <a href="/cadastrarEquipe">Voltar</a></p>`);
+    }
 
-  
-  if (!nomeEquipe || !capitao || !contato) {
-    return res.send(`<p>Todos os campos são obrigatórios. <a href="/cadastrarEquipe">Voltar</a></p>`);
-  }
+    const novaEquipe = {
+        id: contadorEquipe++,
+        nomeEquipe,
+        capitao,
+        contato,
+        jogadores: []
+    };
 
-  const novaEquipe = {
-    id: contadorEquipe++,
-    nomeEquipe,
-    capitao,
-    contato,
-    jogadores: [] 
-  };
-
-  listaEquipes.push(novaEquipe);
-  res.redirect("/listarEquipes");
+    listaEquipes.push(novaEquipe);
+    res.redirect("/listarEquipes");
 });
 
 
-server.get("/listarEquipes", (req, res) => {
-  let conteudo = `
-    <DOCTYPE html>
+server.get("/listarEquipes", verificarUsuarioLogado, (req, res) => {
+    let conteudo = `
+    <!DOCTYPE html>
     <html>
       <head>
         <meta charset="UTF-8">
@@ -235,9 +235,9 @@ server.get("/listarEquipes", (req, res) => {
             <tbody>
   `;
 
-  for (let i = 0; i < listaEquipes.length; i++) {
-    const e = listaEquipes[i];
-    conteudo += `
+    for (let i = 0; i < listaEquipes.length; i++) {
+        const e = listaEquipes[i];
+        conteudo += `
       <tr>
         <td>${e.id}</td>
         <td>${e.nomeEquipe}</td>
@@ -248,9 +248,9 @@ server.get("/listarEquipes", (req, res) => {
         </td>
       </tr>
     `;
-  }
+    }
 
-  conteudo += `
+    conteudo += `
             </tbody>
           </table>
           <a class="btn btn-secondary" href="/">Voltar</a>
@@ -260,43 +260,39 @@ server.get("/listarEquipes", (req, res) => {
     </html>
   `;
 
-  res.send(conteudo);
+    res.send(conteudo);
 });
 
 
+server.get("/equipe/:id", verificarUsuarioLogado, (req, res) => {
+    const id = Number(req.params.id);
+    const equipe = listaEquipes.find(x => x.id === id);
 
+    if (!equipe) {
+        return res.send(`<p>Equipe não encontrada. <a href="/listarEquipes">Voltar</a></p>`);
+    }
 
-server.get("/equipe/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const equipe = listaEquipes.find(x => x.id === id);
-
-  if (!equipe) {
-    return res.send(`<p>Equipe não encontrada. <a href="/listarEquipes">Voltar</a></p>`);
-  }
-
-  
-  let listaJogadoresHtml = "";
-  if (equipe.jogadores.length === 0) {
-    listaJogadoresHtml = "<p>Nenhum jogador cadastrado.</p>";
-  } else {
-    listaJogadoresHtml = "<ul class='list-group mb-3'>";
-    for (let j = 0; j < equipe.jogadores.length; j++) {
-      const pj = equipe.jogadores[j];
-      listaJogadoresHtml += `<li class="list-group-item d-flex justify-content-between align-items-center">
+    let listaJogadoresHtml = "";
+    if (equipe.jogadores.length === 0) {
+        listaJogadoresHtml = "<p>Nenhum jogador cadastrado.</p>";
+    } else {
+        listaJogadoresHtml = "<ul class='list-group mb-3'>";
+        for (let j = 0; j < equipe.jogadores.length; j++) {
+            const pj = equipe.jogadores[j];
+            listaJogadoresHtml += `<li class="list-group-item d-flex justify-content-between align-items-center">
         ${pj.nome} — ${pj.funcao}
         <form style="margin:0" method="POST" action="/equipe/${equipe.id}/jogador/${pj.id}/remover">
           <button class="btn btn-sm btn-danger">Remover</button>
         </form>
       </li>`;
+        }
+        listaJogadoresHtml += "</ul>";
     }
-    listaJogadoresHtml += "</ul>";
-  }
 
-  
-  const podeAdicionar = equipe.jogadores.length < 5;
+    const podeAdicionar = equipe.jogadores.length < 5;
 
-  res.send(`
-    <DOCTYPE html>
+    res.send(`
+    <!DOCTYPE html>
     <html>
       <head>
         <meta charset="UTF-8">
@@ -343,51 +339,58 @@ server.get("/equipe/:id", (req, res) => {
 });
 
 
-server.post("/equipe/:id/adicionarJogador", (req, res) => {
-  const id = Number(req.params.id);
-  const equipe = listaEquipes.find(x => x.id === id);
-  if (!equipe) return res.send(`<p>Equipe não encontrada. <a href="/listarEquipes">Voltar</a></p>`);
+server.post("/equipe/:id/adicionarJogador", verificarUsuarioLogado, (req, res) => {
+    const id = Number(req.params.id);
+    const equipe = listaEquipes.find(x => x.id === id);
+    if (!equipe) return res.send(`<p>Equipe não encontrada. <a href="/listarEquipes">Voltar</a></p>`);
 
-  if (equipe.jogadores.length >= 5) {
-    return res.send(`<p>Equipe já possui 5 jogadores. <a href="/equipe/${id}">Voltar</a></p>`);
-  }
+    if (equipe.jogadores.length >= 5) {
+        return res.send(`<p>Equipe já possui 5 jogadores. <a href="/equipe/${id}">Voltar</a></p>`);
+    }
 
-  const nomeJogador = req.body.nomeJogador;
-  const funcao = req.body.funcao;
+    const nomeJogador = req.body.nomeJogador;
+    const funcao = req.body.funcao;
 
-  
-  if (!nomeJogador || !funcao) {
-    return res.send(`<p>Nome e função obrigatórios. <a href="/equipe/${id}">Voltar</a></p>`);
-  }
+    if (!nomeJogador || !funcao) {
+        return res.send(`<p>Nome e função obrigatórios. <a href="/equipe/${id}">Voltar</a></p>`);
+    }
 
-  
-  const existeFuncao = equipe.jogadores.some(j => j.funcao === funcao);
-  if (existeFuncao) {
-    return res.send(`<p>Já existe um jogador com a função ${funcao} nesta equipe. <a href="/equipe/${id}">Voltar</a></p>`);
-  }
+    const existeFuncao = equipe.jogadores.some(j => j.funcao === funcao);
+    if (existeFuncao) {
+        return res.send(`<p>Já existe um jogador com a função ${funcao} nesta equipe. <a href="/equipe/${id}">Voltar</a></p>`);
+    }
 
-  const novoJogador = {
-    id: contadorJogador++,
-    nome: nomeJogador,
-    funcao
-  };
+    const novoJogador = {
+        id: contadorJogador++,
+        nome: nomeJogador,
+        funcao
+    };
 
-  equipe.jogadores.push(novoJogador);
-  res.redirect(`/equipe/${id}`);
+    equipe.jogadores.push(novoJogador);
+    res.redirect(`/equipe/${id}`);
 });
 
 
-server.post("/equipe/:id/jogador/:playerId/remover", (req, res) => {
-  const id = Number(req.params.id);
-  const playerId = Number(req.params.playerId);
-  const equipe = listaEquipes.find(x => x.id === id);
-  if (!equipe) return res.send(`<p>Equipe não encontrada. <a href="/listarEquipes">Voltar</a></p>`);
+server.post("/equipe/:id/jogador/:playerId/remover", verificarUsuarioLogado, (req, res) => {
+    const id = Number(req.params.id);
+    const playerId = Number(req.params.playerId);
+    const equipe = listaEquipes.find(x => x.id === id);
+    if (!equipe) return res.send(`<p>Equipe não encontrada. <a href="/listarEquipes">Voltar</a></p>`);
 
-  equipe.jogadores = equipe.jogadores.filter(p => p.id !== playerId);
-  res.redirect(`/equipe/${id}`);
+    equipe.jogadores = equipe.jogadores.filter(p => p.id !== playerId);
+    res.redirect(`/equipe/${id}`);
 });
 
-/* ---------------------- INICIAR SERVIDOR ---------------------- */
+
+function verificarUsuarioLogado(requisicao, resposta, proximo) {
+    if (requisicao.session.dadosLogin?.logado) {
+        proximo();
+    } else {
+        resposta.redirect("/login");
+    }
+}
+
+
 server.listen(porta, host, () => {
-  console.log(`Servidor rodando em http://${host}:${porta}`);
+    console.log(`Servidor rodando em http://${host}:${porta}`);
 });
